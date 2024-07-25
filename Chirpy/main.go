@@ -1,29 +1,33 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 )
 
-func main() {
-	const port = "8080"
-	mux := http.NewServeMux()
+type apiConfig struct {
+	fileserverHits int
+}
 
-	server := &http.Server{
+func main() {
+	const filepathRoot = "."
+	const port = "8080"
+
+	apiCfg := apiConfig{
+		fileserverHits: 0,
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("/app/*", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /api/metrics", apiCfg.handlerMetrics)
+	mux.HandleFunc("GET /api/reset", apiCfg.handlerReset)
+
+	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
 	}
 
-	mux.Handle("/", http.FileServer((http.Dir("."))))
-	mux.Handle("/assets", http.FileServer((http.Dir("./logo.png"))))
-
-	fmt.Println("Hello world")
-	err := server.ListenAndServe()
-
-	if err != nil {
-		fmt.Println("Server connection was not made Panic!")
-	} else {
-		fmt.Println("Server on port : ", port)
-	}
-
+	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
+	log.Fatal(srv.ListenAndServe())
 }
